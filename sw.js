@@ -1,4 +1,4 @@
-const CACHE_NAME = "organizador-dinero-v15";
+const CACHE_NAME = "organizador-dinero-v16";
 const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./db.js", "./domain.js", "./manifest.json", "./assets/icon.svg", "./assets/apple-touch-icon.png", "./assets/icon-192.png", "./assets/icon-512.png"];
 
 self.addEventListener("install", (event) => {

@@ -110,10 +110,19 @@ function showDateCalendar(target, monthOffset = 0) {
   popup.setAttribute("aria-label", "Seleccionar fecha");
   popup.innerHTML = dateCalendarMarkup(input, monthDate);
   const parent = dialog.open ? dialog : document.body;
-  parent.querySelector(".date-calendar-popup")?.remove();
+  const previousPopup = parent.querySelector(".date-calendar-popup");
+  const previousPosition = state.dateCalendar?.target === input.id && previousPopup
+    ? previousPopup.getBoundingClientRect()
+    : null;
+  previousPopup?.remove();
   parent.append(popup);
   state.dateCalendar = { target: input.id, monthDate: `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, "0")}-01` };
-  positionDateCalendar(popup, target);
+  if (previousPosition) {
+    popup.style.left = `${previousPosition.left}px`;
+    popup.style.top = `${previousPosition.top}px`;
+  } else {
+    positionDateCalendar(popup, target);
+  }
 }
 
 function closeDateCalendar() {
@@ -358,7 +367,7 @@ function forecastForDate(date) {
     debt.direction === "owed_to_me" && debt.date <= date &&
     (!debt.accountId || selectedIds.has(debt.accountId))
   ).reduce((sum, debt) => sum + debtOutstanding(debt), 0);
-  return { total: current + scheduled + collections, current, scheduled, collections };
+  return { total: current + scheduled, current, scheduled, collections, movements };
 }
 
 function transactionLabel(tx) {
@@ -433,9 +442,7 @@ function renderHome() {
   const activeGoals = state.goals.filter((goal) => !goal.hidden && !goal.completedAt);
   const recent = [...state.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
   const forecast = forecastForDate(state.forecastDate);
-  const pendingTransactions = state.transactions.filter((tx) =>
-    (tx.type === "income" || tx.type === "expense") && !tx.confirmed
-  ).sort((a, b) => a.date.localeCompare(b.date));
+  const forecastMovements = [...forecast.movements].sort((a, b) => a.date.localeCompare(b.date));
   const budgetItems = state.budgets.filter((budget) => !budget.hidden && budget.period === monthKey()).slice(0, 4);
   root.innerHTML = `
     ${pageHeading("Tu dinero, más claro", "Hola, ¿cómo va tu mes?", "Un vistazo sencillo a lo que tienes y a lo que estás construyendo.",
@@ -456,13 +463,17 @@ function renderHome() {
         }).join("") : emptyState("Empieza con una cuenta", "Añade tu monedero o cuenta bancaria para empezar.", `<button class="button button-primary" data-action="new-account">Crear mi primera cuenta</button>`)}
       </article>
     </section>
-    ${pendingTransactions.length ? `<section class="panel" style="margin-top:19px"><div class="panel-heading"><div><h2>Movimientos previstos</h2><p>No afectan al saldo actual hasta que confirmes que ocurrieron.</p></div></div>${pendingTransactions.slice(0,5).map((tx) => transactionRow(tx)).join("")}</section>` : ""}
+    <section class="panel" style="margin-top:19px">
+      <div class="panel-heading"><div><h2>Movimientos previstos</h2><p>Importe neto de movimientos futuros o pendientes hasta ${escapeHtml(formatDate(state.forecastDate))}, sin incluir el saldo actual.</p></div></div>
+      <div class="forecast-total">${money(forecast.scheduled)}</div>
+      ${forecastMovements.length ? forecastMovements.slice(0,5).map((tx) => transactionRow(tx)).join("") : emptyState("Sin movimientos previstos", "No hay ingresos ni gastos futuros o pendientes hasta esta fecha.")}
+    </section>
     <section class="two-panels">
       <article class="panel">
-        <div class="panel-heading"><div><h2>Previsión de patrimonio</h2><p>Saldo actual, movimientos previstos y cobros pendientes</p></div></div>
+        <div class="panel-heading"><div><h2>Previsión de patrimonio</h2><p>Saldo actual y movimientos previstos; las deudas pendientes no se suman</p></div></div>
         <div class="field forecast-date"><label for="forecast-date">Estimar a fecha (DD/MM/YYYY)</label>${dateInput("forecastDate", state.forecastDate, { id: "forecast-date", required: true, min: today() })}</div>
         <div class="forecast-total">${money(forecast.total)}</div>
-        <div class="forecast-breakdown"><span>Saldo actual <strong>${money(forecast.current)}</strong></span><span>Movimientos previstos <strong>${money(forecast.scheduled)}</strong></span><span>Te deben <strong>${money(forecast.collections)}</strong></span></div>
+        <div class="forecast-breakdown"><span>Saldo actual <strong>${money(forecast.current)}</strong></span><span>Movimientos previstos <strong>${money(forecast.scheduled)}</strong></span><span>Te deben (no sumado) <strong>${money(forecast.collections)}</strong></span></div>
       </article>
       <article class="panel">
         <div class="panel-heading"><div><h2>Presupuestos del mes</h2><p>Tu progreso, sin sorpresas</p></div><button class="text-link" data-view="budgets">Ver todos →</button></div>
