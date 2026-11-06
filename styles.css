@@ -272,7 +272,7 @@ h1 { font-family: "Avenir Next", -apple-system, sans-serif; font-size: clamp(26p
   .goal-grid { gap: 9px; }
   .goal-card { padding: 12px; }
   .mobile-nav { position: fixed; bottom: 0; left: 0; right: 0; height: calc(62px + env(safe-area-inset-bottom)); display: flex; z-index: 5; justify-content: space-around; align-items: start; padding: 7px 4px env(safe-area-inset-bottom); background: #fff; border-top: 1px solid var(--line); }
-  .mobile-nav .nav-link { width: 16.3%; display: flex; flex-direction: column; gap: 4px; padding: 5px 1px; align-items: center; border-radius: 9px; font-size: 16px; }
+  .mobile-nav .nav-link { width: 14.28%; display: flex; flex-direction: column; gap: 4px; padding: 5px 1px; align-items: center; border-radius: 9px; font-size: 16px; }
   .mobile-nav .nav-link > span { width: auto; font-size: 19px; }
   .mobile-nav .nav-link small { font-size: 8px; font-weight: 600; white-space: nowrap; }
   .form-grid { grid-template-columns: 1fr; gap: 12px; }
