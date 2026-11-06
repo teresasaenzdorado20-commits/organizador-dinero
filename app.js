@@ -609,23 +609,33 @@ function debtGroups(direction, includeClosed = false) {
   return [...grouped.values()].sort((a, b) => a.person.localeCompare(b.person, "es"));
 }
 
-function debtGroupCard(group, direction, includeClosed = false) {
+function debtGroupCard(group, direction) {
   return `<article class="debt-person-card">
     <div class="debt-person-head"><div class="account-name"><span class="account-icon" style="background:${direction === "owed_to_me" ? "#e4f2e9" : "#f7e2e4"}">${direction === "owed_to_me" ? "↙" : "↗"}</span><span><strong>${escapeHtml(group.person)}</strong><small>${group.debts.length} ${group.debts.length === 1 ? "apunte" : "apuntes"}</small></span></div><strong class="${direction === "owed_to_me" ? "green-text" : "red-text"}">${money(group.total)}</strong></div>
     <div class="debt-items">${group.debts.map((debt) => {
       const outstanding = debtOutstanding(debt);
       const closed = outstanding <= .005;
       const events = state.debtEvents.filter((event) => event.debtId === debt.id);
-      return `<div class="debt-item"><div class="debt-item-main"><strong>${escapeHtml(debt.description || (debt.source === "expense" ? "Cuenta compartida" : "Deuda registrada"))}</strong><small>${escapeHtml(dateLabel(debt.date || debt.createdAt.slice(0, 10)))} · ${money(debt.amount)}${Number(debt.paidAmount || 0) ? ` · abonado ${money(debt.paidAmount)}` : ""}${Number(debt.forgivenAmount || 0) ? ` · perdonado ${money(debt.forgivenAmount)}` : ""}${Number(debt.offsetAmount || 0) ? ` · compensado ${money(debt.offsetAmount)}` : ""}</small>${events.length ? `<small class="debt-event-summary">${events.slice(-3).map((event) => `${event.kind === "payment" ? "Abono" : event.kind === "offset-paid" ? "Compensación aplicada" : event.kind === "forgiveness" ? "Perdón" : event.kind === "offset" ? "Compensación" : event.kind === "adjusted" ? "Ajuste" : "Creada"} ${money(event.amount)} · ${escapeHtml(dateLabel(event.date))}`).join(" · ")}</small>` : ""}</div>
-      <div class="debt-item-actions">${closed ? `<span class="pill">Liquidada</span>` : includeClosed ? `<span class="pill warning">Pendiente ${money(outstanding)}</span>` : `<span class="pill">${money(outstanding)} pendiente</span><button class="button button-secondary" data-action="pay-debt" data-id="${escapeHtml(debt.id)}">Registrar abono</button><button class="button button-quiet" data-action="forgive-debt" data-id="${escapeHtml(debt.id)}">Perdonar</button>`}</div></div>`;
+      const sourceTransaction = debt.source === "expense" ? state.transactions.find((tx) => tx.id === debt.transactionId) : null;
+      const eventRows = events.map((event) => {
+        const tx = event.transactionId ? state.transactions.find((entry) => entry.id === event.transactionId) : null;
+        const label = event.kind === "payment" ? "Abono" : event.kind === "offset-paid" ? "Compensación aplicada" : event.kind === "forgiveness" ? "Perdón" : event.kind === "offset" ? "Compensación" : event.kind === "adjusted" ? "Ajuste" : "Creada";
+        const editablePayment = tx?.debtId === debt.id && ["payment", "offset-paid", "forgiveness"].includes(event.kind);
+        return `<div class="debt-event-row"><small>${label} ${money(event.amount)} · ${escapeHtml(dateLabel(event.date))}</small>${editablePayment ? `<div class="inline-actions"><button class="text-link" data-action="edit-debt-payment" data-id="${escapeHtml(tx.id)}">Editar</button><button class="text-link" data-action="delete-transaction" data-id="${escapeHtml(tx.id)}">Eliminar</button></div>` : ""}</div>`;
+      }).join("");
+      const debtActions = closed
+        ? `<span class="pill">Liquidada</span>`
+        : `<span class="pill">${money(outstanding)} pendiente</span><button class="button button-secondary" data-action="pay-debt" data-id="${escapeHtml(debt.id)}">Registrar abono</button><button class="button button-quiet" data-action="forgive-debt" data-id="${escapeHtml(debt.id)}">Perdonar</button>`;
+      return `<div class="debt-item"><div class="debt-item-main"><strong>${escapeHtml(debt.description || (debt.source === "expense" ? "Cuenta compartida" : "Deuda registrada"))}</strong><small>${escapeHtml(dateLabel(debt.date || debt.createdAt.slice(0, 10)))} · ${money(debt.amount)}${Number(debt.paidAmount || 0) ? ` · abonado ${money(debt.paidAmount)}` : ""}${Number(debt.forgivenAmount || 0) ? ` · perdonado ${money(debt.forgivenAmount)}` : ""}${Number(debt.offsetAmount || 0) ? ` · compensado ${money(debt.offsetAmount)}` : ""}</small>${eventRows ? `<div class="debt-event-summary">${eventRows}</div>` : ""}</div>
+      <div class="debt-item-actions">${debtActions}<button class="button button-quiet" data-action="${sourceTransaction ? "edit-source-debt" : "edit-debt"}" data-id="${escapeHtml(debt.id)}">${sourceTransaction ? "Editar gasto" : "Editar"}</button><button class="button button-danger" data-action="delete-debt" data-id="${escapeHtml(debt.id)}">Eliminar</button></div></div>`;
     }).join("")}</div>
   </article>`;
 }
 
-function addDebtWithOffsets(debt, events) {
+function addDebtWithOffsets(debt, events, debts = state.debts) {
   const opposite = debt.direction === "owed_to_me" ? "i_owe" : "owed_to_me";
   let remaining = debtOutstanding(debt);
-  const matches = state.debts.filter((entry) => entry.direction === opposite && entry.personKey === debt.personKey);
+  const matches = debts.filter((entry) => entry.id !== debt.id && entry.direction === opposite && entry.personKey === debt.personKey);
   for (const other of matches) {
     const offset = Math.min(remaining, debtOutstanding(other));
     if (offset <= .005) continue;
@@ -654,7 +664,7 @@ function renderDebts() {
       ${incomingGroups.length ? `<div class="debt-groups">${incomingGroups.map((group) => debtGroupCard(group, "owed_to_me")).join("")}</div>` : emptyState("Nadie te debe dinero", "Al dividir una cuenta, los anticipos se añaden aquí automáticamente.")}</section>
     <section class="panel debt-section"><div class="panel-heading"><div><h2>Debo</h2><p>Lo que otras personas han adelantado por ti.</p></div><button class="button button-secondary" data-action="new-debt" data-direction="i_owe">＋ Añadir</button></div>
       ${outgoingGroups.length ? `<div class="debt-groups">${outgoingGroups.map((group) => debtGroupCard(group, "i_owe")).join("")}</div>` : emptyState("No tienes deudas pendientes", "Añade una deuda cuando alguien pague por ti.")}</section>
-    ${history.length ? `<section class="panel debt-section"><div class="panel-heading"><div><h2>Historial liquidado</h2><p>Abonos y condonaciones conservados para consulta.</p></div></div><div class="debt-groups">${debtGroups("owed_to_me", true).filter((group) => group.debts.some((debt) => debtOutstanding(debt) <= .005)).map((group) => debtGroupCard({ ...group, debts: group.debts.filter((debt) => debtOutstanding(debt) <= .005) }, "owed_to_me", true)).join("")}${debtGroups("i_owe", true).filter((group) => group.debts.some((debt) => debtOutstanding(debt) <= .005)).map((group) => debtGroupCard({ ...group, debts: group.debts.filter((debt) => debtOutstanding(debt) <= .005) }, "i_owe", true)).join("")}</div></section>` : ""}`;
+    ${history.length ? `<section class="panel debt-section"><div class="panel-heading"><div><h2>Historial liquidado</h2><p>Abonos y condonaciones conservados para consulta.</p></div></div><div class="debt-groups">${debtGroups("owed_to_me", true).filter((group) => group.debts.some((debt) => debtOutstanding(debt) <= .005)).map((group) => debtGroupCard({ ...group, debts: group.debts.filter((debt) => debtOutstanding(debt) <= .005) }, "owed_to_me")).join("")}${debtGroups("i_owe", true).filter((group) => group.debts.some((debt) => debtOutstanding(debt) <= .005)).map((group) => debtGroupCard({ ...group, debts: group.debts.filter((debt) => debtOutstanding(debt) <= .005) }, "i_owe")).join("")}</div></section>` : ""}`;
 }
 
 function renderStats() {
@@ -999,19 +1009,45 @@ function tagFilterDialog() {
     </form>`);
 }
 
-function debtForm(direction = "i_owe") {
+function debtForm(direction = "i_owe", existing = null) {
   const accounts = getVisibleAccounts();
-  showDialog(direction === "owed_to_me" ? "Registrar que me deben" : "Registrar una deuda", "La anotación no mueve dinero; registra un pago cuando se liquide.", `
-    <form data-form="debt" data-direction="${direction}">
+  const selectedAccount = existing?.accountId || accounts[0]?.id || "";
+  showDialog(existing ? "Editar deuda" : direction === "owed_to_me" ? "Registrar que me deben" : "Registrar una deuda", "La anotación no mueve dinero; registra un pago cuando se liquide.", `
+    <form data-form="debt" data-id="${escapeHtml(existing?.id || "")}" data-direction="${direction}">
       <div class="form-grid">
         <div class="field"><label>Quién debe</label><select name="direction"><option value="i_owe" ${direction === "i_owe" ? "selected" : ""}>Debo yo a esa persona</option><option value="owed_to_me" ${direction === "owed_to_me" ? "selected" : ""}>Esa persona me debe</option></select></div>
-        <div class="field"><label>Persona</label><input name="person" maxlength="60" required placeholder="Ej. Andrea"></div>
-        <div class="field"><label>Importe (€)</label><input name="amount" type="number" min="0.01" step="0.01" required></div>
-        <div class="field"><label>Fecha (DD/MM/YYYY)</label>${dateInput("date", today(), { required: true })}</div>
-        <div class="field"><label>Cuenta de retención (si te deben)</label><select name="accountId"><option value="">Selecciona una cuenta</option>${accounts.map((account) => `<option value="${escapeHtml(account.id)}" ${account.id === accounts[0]?.id ? "selected" : ""}>${escapeHtml(account.name)}</option>`).join("")}</select></div>
-        <div class="field full"><label>Concepto</label><input name="description" maxlength="100" placeholder="Ej. Cena, entradas, viaje" required></div>
+        <div class="field"><label>Persona</label><input name="person" maxlength="60" required placeholder="Ej. Andrea" value="${escapeHtml(existing?.person || "")}"></div>
+        <div class="field"><label>Importe (€)</label><input name="amount" type="number" min="0.01" step="0.01" required value="${existing ? Number(existing.amount).toFixed(2) : ""}"></div>
+        <div class="field"><label>Fecha (DD/MM/YYYY)</label>${dateInput("date", existing?.date || today(), { required: true })}</div>
+        <div class="field"><label>Cuenta de retención (si te deben)</label><select name="accountId"><option value="">Selecciona una cuenta</option>${accounts.map((account) => `<option value="${escapeHtml(account.id)}" ${account.id === selectedAccount ? "selected" : ""}>${escapeHtml(account.name)}</option>`).join("")}</select></div>
+        <div class="field full"><label>Concepto</label><input name="description" maxlength="100" placeholder="Ej. Cena, entradas, viaje" required value="${escapeHtml(existing?.description || "")}"></div>
       </div>
-      <div class="form-footer"><button type="button" class="button button-quiet" data-action="close-dialog">Cancelar</button><button class="button button-primary">Guardar deuda</button></div>
+      <div class="form-footer"><button type="button" class="button button-quiet" data-action="close-dialog">Cancelar</button><button class="button button-primary">${existing ? "Guardar cambios" : "Guardar deuda"}</button></div>
+    </form>`);
+}
+
+function debtCollectionForm(tx) {
+  const debt = state.debts.find((entry) => entry.id === tx.debtId);
+  const event = state.debtEvents.find((entry) => entry.transactionId === tx.id && entry.kind === "payment");
+  if (!debt || !event || debt.direction !== "owed_to_me") {
+    notify("No se encuentra el abono de deuda que quieres editar.");
+    return;
+  }
+  const accounts = getVisibleAccounts();
+  const otherPaid = Number(debt.paidAmount || 0) - Number(event.amount);
+  const maximum = Number(debt.amount) - Number(debt.forgivenAmount || 0) - Number(debt.offsetAmount || 0) - otherPaid;
+  const extraAmount = tx.settlementGroupId
+    ? state.transactions.filter((entry) => entry.settlementGroupId === tx.settlementGroupId && entry.type === "income" && entry.id !== tx.id).reduce((sum, entry) => sum + Number(entry.amount), 0)
+    : 0;
+  showDialog("Editar abono recibido", `Actualiza el importe, la cuenta o la fecha del abono de ${debt.person}.`, `
+    <form data-form="debt-collection" data-id="${escapeHtml(tx.id)}">
+      <div class="form-grid">
+        <div class="field"><label>Importe recibido (€)</label><input name="amount" type="number" min="0.01" step="0.01" value="${(Number(tx.amount) + extraAmount).toFixed(2)}" required></div>
+        <div class="field"><label>Ingresar en la cuenta</label><select name="accountId" required>${accountOptions(tx.accountId)}</select></div>
+        <div class="field"><label>Fecha (DD/MM/YYYY)</label>${dateInput("date", tx.date, { required: true })}</div>
+        <div class="field full"><label>Nota (opcional)</label><input name="note" maxlength="100" value="${escapeHtml(tx.note || "")}"></div>
+      </div>
+      <div class="form-footer"><button type="button" class="button button-quiet" data-action="close-dialog">Cancelar</button><button class="button button-primary">Guardar cambios</button></div>
     </form>`);
 }
 
@@ -1388,6 +1424,53 @@ async function removeTransaction(tx) {
   await refresh();
 }
 
+async function removeDebt(debt) {
+  const offsetEvents = state.debtEvents.filter((event) => event.kind === "offset" &&
+    (event.debtId === debt.id || event.linkedDebtId === debt.id));
+  const linkedDebtIds = new Set(offsetEvents.map((event) => event.debtId === debt.id ? event.linkedDebtId : event.debtId).filter(Boolean));
+  if ([...linkedDebtIds].some((linkedId) => Number(state.debts.find((entry) => entry.id === linkedId)?.offsetPaidAmount || 0) > .005)) {
+    throw new Error("No se puede eliminar esta deuda porque una deuda compensada ya tiene abonos aplicados. Elimina o ajusta primero esos abonos.");
+  }
+
+  const paymentTransactionIds = state.transactions.filter((tx) => tx.debtId === debt.id).map((tx) => tx.id);
+  for (const transactionId of paymentTransactionIds) {
+    const tx = state.transactions.find((entry) => entry.id === transactionId);
+    if (tx) await removeTransaction(tx);
+  }
+
+  const currentDebt = state.debts.find((entry) => entry.id === debt.id);
+  if (!currentDebt) return;
+  const debtEvents = state.debtEvents.filter((event) => event.debtId === currentDebt.id || event.linkedDebtId === currentDebt.id);
+  const externalDebts = new Map();
+  for (const event of debtEvents.filter((entry) => entry.kind === "offset" && entry.debtId === currentDebt.id && entry.linkedDebtId)) {
+    const counterpart = state.debts.find((entry) => entry.id === event.linkedDebtId);
+    if (counterpart) {
+      const updated = externalDebts.get(counterpart.id) || { ...counterpart };
+      updated.offsetAmount = Math.max(0, Number(updated.offsetAmount || 0) - Number(event.amount));
+      externalDebts.set(updated.id, updated);
+    }
+  }
+
+  const records = { debts: [...externalDebts.values()] };
+  if (currentDebt.source === "expense") {
+    const source = state.transactions.find((tx) => tx.id === currentDebt.transactionId);
+    if (source) {
+      const shares = source.shares || [];
+      const removedShares = shares.filter((share) => share.personKey === currentDebt.personKey);
+      if (removedShares.length) {
+        source.shares = shares.filter((share) => share.personKey !== currentDebt.personKey);
+        source.ownAmount = Number(source.ownAmount ?? source.amount) + removedShares.reduce((sum, share) => sum + Number(share.amount), 0);
+        records.transactions = [source];
+      }
+    }
+  }
+  await db.putAndDelete(records, {
+    debts: [currentDebt.id],
+    debtEvents: debtEvents.map((event) => event.id)
+  });
+  await refresh();
+}
+
 function showImportError(message) {
   notify(message);
 }
@@ -1760,6 +1843,9 @@ async function submitForm(form) {
       closeDialog();
       render();
     } else if (formType === "debt") {
+      const old = state.debts.find((entry) => entry.id === form.dataset.id);
+      if (form.dataset.id && !old) throw new Error("No se encuentra la deuda que quieres editar.");
+      if (old?.source === "expense" && state.transactions.some((tx) => tx.id === old.transactionId)) throw new Error("Edita este registro desde el gasto dividido que lo originó.");
       const person = String(get("person") || "").trim();
       const amount = num("amount");
       if (!person) throw new Error("Indica el nombre de la persona.");
@@ -1767,18 +1853,102 @@ async function submitForm(form) {
       const direction = String(get("direction"));
       const accountId = direction === "owed_to_me" ? String(get("accountId")) : "";
       if (direction === "owed_to_me" && (!getAccount(accountId) || getAccount(accountId).archived)) throw new Error("Selecciona una cuenta activa para reservar el importe.");
+      const personKey = person.replace(/\s+/g, " ").toLocaleLowerCase("es");
+      const settledAmount = Number(old?.paidAmount || 0) + Number(old?.forgivenAmount || 0) + Number(old?.offsetPaidAmount || 0);
+      if (old && amount + .005 < settledAmount) throw new Error(`El importe no puede ser inferior a los ${money(settledAmount)} ya abonados, perdonados o compensados.`);
+      const identityChanged = old && (direction !== old.direction || personKey !== old.personKey);
+      const settled = settledAmount > .005;
+      if (identityChanged && settled) throw new Error("No puedes cambiar la persona o el sentido de una deuda que ya tiene abonos, perdones o compensaciones.");
+      const paidOffset = Number(old?.offsetPaidAmount || 0) > .005;
+      if (old && paidOffset && (identityChanged || Math.abs(amount - Number(old.amount)) > .005)) {
+        throw new Error("No puedes cambiar la persona, el sentido o el importe de una deuda con compensaciones ya aplicadas.");
+      }
       const debt = {
-        id: id(), direction, person, personKey: person.trim().replace(/\s+/g, " ").toLocaleLowerCase("es"),
-        amount, paidAmount: 0, forgivenAmount: 0, offsetAmount: 0, accountId,
+        ...(old || {}), id: old?.id || id(), direction, person, personKey,
+        amount, paidAmount: Number(old?.paidAmount || 0), forgivenAmount: Number(old?.forgivenAmount || 0),
+        offsetAmount: paidOffset ? Number(old.offsetAmount || 0) : 0,
+        offsetPaidAmount: Number(old?.offsetPaidAmount || 0), accountId,
         description: String(get("description") || "").trim(), source: "manual", date: parsedFormDate(data, "date"),
-        createdAt: new Date().toISOString()
+        createdAt: old?.createdAt || new Date().toISOString()
       };
-      const events = [{ id: id(), debtId: debt.id, kind: "created", amount, date: debt.date, createdAt: new Date().toISOString() }];
-      addDebtWithOffsets(debt, events);
+      const events = [];
+      const deletedEventIds = new Set();
+      const updates = new Map();
+      if (old && !paidOffset) {
+        for (const event of state.debtEvents.filter((entry) => entry.kind === "offset" && entry.debtId === old.id && entry.linkedDebtId)) {
+          const counterpart = state.debts.find((entry) => entry.id === event.linkedDebtId);
+          if (counterpart) {
+            const updated = updates.get(counterpart.id) || { ...counterpart };
+            updated.offsetAmount = Math.max(0, Number(updated.offsetAmount || 0) - Number(event.amount));
+            updates.set(updated.id, updated);
+          }
+        }
+        state.debtEvents.filter((entry) => entry.kind === "offset" && (entry.debtId === old.id || entry.linkedDebtId === old.id))
+          .forEach((event) => deletedEventIds.add(event.id));
+        if (Math.abs(amount - Number(old.amount)) > .005) {
+          events.push({ id: id(), debtId: debt.id, kind: "adjusted", amount: amount - Number(old.amount), date: today(), createdAt: new Date().toISOString() });
+        }
+        const availableDebts = state.debts.filter((entry) => entry.id !== old.id).map((entry) => updates.get(entry.id) || entry);
+        addDebtWithOffsets(debt, events, availableDebts);
+      } else if (!old) {
+        events.push({ id: id(), debtId: debt.id, kind: "created", amount, date: debt.date, createdAt: new Date().toISOString() });
+        addDebtWithOffsets(debt, events);
+      }
       const touched = new Set(events.map((event) => event.debtId));
-      const updatedDebts = state.debts.filter((entry) => touched.has(entry.id));
-      await db.putMany({ debts: [debt, ...updatedDebts], debtEvents: events });
-      closeDialog(); await refresh(); notify("Deuda registrada.");
+      for (const entry of state.debts.filter((item) => touched.has(item.id))) {
+        if (entry.id !== debt.id && !updates.has(entry.id)) updates.set(entry.id, entry);
+      }
+      await db.putAndDelete({ debts: [debt, ...updates.values()], debtEvents: events }, { debtEvents: [...deletedEventIds] });
+      closeDialog(); await refresh(); notify(old ? "Deuda actualizada." : "Deuda registrada.");
+    } else if (formType === "debt-collection") {
+      const tx = state.transactions.find((entry) => entry.id === form.dataset.id);
+      const debt = state.debts.find((entry) => entry.id === tx?.debtId);
+      const event = state.debtEvents.find((entry) => entry.transactionId === tx?.id && entry.kind === "payment");
+      if (!tx || !debt || !event || debt.direction !== "owed_to_me") throw new Error("No se encuentra el abono de deuda que quieres editar.");
+      const amount = num("amount");
+      if (!(amount > 0)) throw new Error("El importe debe ser mayor que cero.");
+      const date = parsedFormDate(data, "date");
+      if (date > today()) throw new Error("Un abono recibido no puede registrarse en una fecha futura.");
+      const account = getAccount(String(get("accountId")));
+      if (!account || account.archived) throw new Error("Selecciona una cuenta activa.");
+      const otherPaid = Number(debt.paidAmount || 0) - Number(event.amount);
+      const maximum = Number(debt.amount) - Number(debt.forgivenAmount || 0) - Number(debt.offsetAmount || 0) - otherPaid;
+      const debtAmount = Math.min(amount, maximum);
+      const excess = amount - debtAmount;
+      debt.paidAmount = otherPaid + debtAmount;
+      event.amount = debtAmount;
+      event.date = date;
+      event.accountId = account.id;
+      tx.amount = debtAmount;
+      tx.ownAmount = debtAmount;
+      tx.accountId = account.id;
+      tx.accountName = account.name;
+      tx.date = date;
+      tx.person = debt.person;
+      tx.note = String(get("note") || `Devolución de ${debt.person}`).trim();
+      const group = tx.settlementGroupId ? state.transactions.filter((entry) => entry.settlementGroupId === tx.settlementGroupId && entry.type === "income" && entry.id !== tx.id) : [];
+      const extra = group[0];
+      const transactions = [tx];
+      const deletes = { debts: [], debtEvents: [], transactions: [] };
+      if (excess > .005) {
+        tx.settlementGroupId ||= id();
+        if (extra) {
+          extra.amount = excess;
+          extra.accountId = account.id;
+          extra.accountName = account.name;
+          extra.date = date;
+          transactions.push(extra);
+        } else {
+          transactions.push({
+            id: id(), type: "income", amount: excess, accountId: account.id, date, confirmed: true,
+            settlementGroupId: tx.settlementGroupId || id(), note: `Excedente de devolución de ${debt.person}`,
+            createdAt: tx.createdAt
+          });
+        }
+      } else if (extra) deletes.transactions.push(extra.id);
+      for (const redundant of group.slice(1)) deletes.transactions.push(redundant.id);
+      await db.putAndDelete({ debts: [debt], debtEvents: [event], transactions }, deletes);
+      closeDialog(); await refresh(); notify("Abono recibido actualizado.");
     } else if (formType === "debt-payment") {
       const debt = state.debts.find((entry) => entry.id === form.dataset.id);
       if (!debt || debtOutstanding(debt) <= .005) throw new Error("Esta deuda ya está liquidada.");
@@ -1906,7 +2076,8 @@ async function handleAction(action, target) {
     if (tx && (tx.type === "income" || tx.type === "expense")) transactionForm(tx.type, tx);
   }   else if (action === "delete-transaction") {
     const tx = state.transactions.find((entry) => entry.id === idValue);
-    if (tx && await confirmInDialog("Eliminar movimiento", `Se eliminará el ${tx.type === "income" ? "ingreso" : "gasto"} de ${money(tx.amount)} y se recalcularán el saldo, las deudas y las estadísticas.`, "Eliminar")) {
+    const movementName = tx?.type === "income" ? "ingreso" : tx?.type === "debt_collection" ? "abono recibido" : "gasto";
+    if (tx && await confirmInDialog("Eliminar movimiento", `Se eliminará el ${movementName} de ${money(tx.amount)} y se recalcularán el saldo, las deudas y las estadísticas.`, "Eliminar")) {
       await removeTransaction(tx);
       notify("Movimiento eliminado y datos relacionados recalculados.");
     }
@@ -1916,6 +2087,31 @@ async function handleAction(action, target) {
   else if (action === "stats-accounts") accountFilterDialog("stats");
   else if (action === "stats-tags") tagFilterDialog();
   else if (action === "new-debt") debtForm(target.dataset.direction || "i_owe");
+  else if (action === "edit-debt") {
+    const debt = state.debts.find((entry) => entry.id === idValue);
+    if (debt) debtForm(debt.direction, debt);
+  } else if (action === "edit-source-debt") {
+    const debt = state.debts.find((entry) => entry.id === idValue);
+    const source = state.transactions.find((entry) => entry.id === debt?.transactionId);
+    if (source) transactionForm("expense", source);
+    else notify("No se encuentra el gasto dividido que originó esta deuda.");
+  } else if (action === "delete-debt") {
+    const debt = state.debts.find((entry) => entry.id === idValue);
+    if (debt && await confirmInDialog(
+      "Eliminar deuda",
+      `Se eliminará la deuda de ${money(debt.amount)} junto con sus abonos relacionados. ${debt.source === "expense" ? "La parte de esta persona pasará a contar como gasto propio en el movimiento dividido." : ""}`,
+      "Eliminar"
+    )) {
+      await removeDebt(debt);
+      notify("Deuda eliminada y saldos recalculados.");
+    }
+  } else if (action === "edit-debt-payment") {
+    const tx = state.transactions.find((entry) => entry.id === idValue);
+    if (tx?.type === "debt_collection") debtCollectionForm(tx);
+    else if (tx?.type === "expense") transactionForm("expense", tx);
+    else if (tx?.type === "income") transactionForm("income", tx);
+    else notify("Este tipo de abono no se puede editar desde aquí.");
+  }
   else if (action === "pay-debt") {
     const debt = state.debts.find((entry) => entry.id === idValue);
     if (debt) debtPaymentForm(debt);

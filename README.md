@@ -49,6 +49,7 @@ Al eliminar una cuenta se puede dar de baja su saldo o repartirlo entre otras cu
 - En **Movimientos** se pueden filtrar transacciones entre dos fechas inclusivas con el calendario DD/MM/YYYY; las fechas se validan para evitar que el inicio quede después del final.
 - Comprar el objetivo asociado a un ahorro se identifica como compra del objetivo y no genera el aviso de dinero reservado usado para un gasto ajeno.
 - Ingresos y gastos se pueden editar o eliminar desde **Movimientos**; el saldo se recalcula y los registros relacionados de deuda se mantienen coherentes.
+- Las deudas se pueden editar o eliminar desde **Me deben / Debo**; los abonos y devoluciones también se pueden editar o eliminar desde su historial. Las deudas derivadas de gastos divididos se actualizan desde el gasto de origen.
 - Los ingresos y gastos futuros no alteran el saldo hasta confirmar manualmente su ejecución; la previsión de inicio y el gráfico de estadísticas incluyen los movimientos programados y los cobros pendientes.
 - Las etiquetas de gastos e ingresos se guardan por separado, admiten jerarquía principal/subetiqueta multinivel y multienlace, y se pueden asignar varias a cada movimiento y presupuesto. Los cambios y eliminaciones conservan el historial financiero.
 - Las confirmaciones y formularios emergentes usan modales táctiles adaptados a móvil; no se usan `alert()`, `confirm()` ni `prompt()` del navegador.

@@ -182,6 +182,9 @@ h1 { font-family: "Avenir Next", -apple-system, sans-serif; font-size: clamp(26p
 .debt-item-main > strong { font-size: 11px; }
 .debt-item-main > small { color: var(--muted); font-size: 10px; margin-top: 4px; }
 .debt-item-main .debt-event-summary { color: #788f80; line-height: 1.5; }
+.debt-event-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 5px; }
+.debt-event-row > small { margin-top: 0; }
+.debt-event-row .text-link { font-size: 10px; }
 .debt-item-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: end; }
 .debt-item-actions .button { padding: 7px 9px; font-size: 10px; white-space: nowrap; }
 .expense-share-list { display: grid; gap: 9px; margin: 12px 0; }
