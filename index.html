@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f7f3">
+  <meta name="description" content="Organiza cuentas, gastos, presupuestos y ahorros de forma privada en tu dispositivo.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Organizador">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Organizador de dinero</title>
+</head>
+<body>
+  <div id="launch-help" class="launch-help" hidden>
+    Para usar la aplicación, no abras este archivo directamente. Cierra esta pestaña y haz doble clic en
+    <strong>Iniciar Organizador.bat</strong> dentro de esta carpeta.
+  </div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" aria-label="Organizador de dinero, inicio">
+        <span class="brand-mark">◈</span>
+        <span><strong>Organizador</strong><small>de dinero</small></span>
+      </a>
+      <nav class="main-nav" aria-label="Navegación principal">
+        <button class="nav-link active" data-view="home"><span>⌂</span> Resumen</button>
+        <button class="nav-link" data-view="activity"><span>↕</span> Movimientos</button>
+        <button class="nav-link" data-view="budgets"><span>▤</span> Presupuestos</button>
+        <button class="nav-link" data-view="savings"><span>◉</span> Ahorros</button>
+        <button class="nav-link" data-view="debts"><span>⇄</span> Me deben / Debo</button>
+        <button class="nav-link" data-view="stats"><span>▥</span> Estadísticas</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="privacy-note"><span class="privacy-icon">♧</span><span><strong>Tus datos son tuyos</strong><small>Guardados solo en este dispositivo</small></span></div>
+        <button class="nav-link" data-view="settings"><span>⚙</span> Ajustes y copia</button>
+        <small class="version-label">Organizador de dinero · local</small>
+      </div>
+    </aside>
+    <main class="main-content">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark">◈</span><strong>Organizador</strong></div>
+        <div class="topbar-date" id="today-label"></div>
+        <button class="button button-primary top-add" data-action="new-expense">＋ <span>Nuevo movimiento</span></button>
+      </header>
+      <div id="view-root" class="view-root" aria-live="polite"></div>
+    </main>
+  </div>
+  <nav class="mobile-nav" aria-label="Navegación móvil">
+    <button class="nav-link active" data-view="home"><span>⌂</span><small>Inicio</small></button>
+    <button class="nav-link" data-view="activity"><span>↕</span><small>Actividad</small></button>
+    <button class="nav-link" data-view="budgets"><span>▤</span><small>Presup.</small></button>
+    <button class="nav-link" data-view="savings"><span>◉</span><small>Ahorros</small></button>
+    <button class="nav-link" data-view="debts"><span>⇄</span><small>Deudas</small></button>
+    <button class="nav-link" data-view="stats"><span>▥</span><small>Datos</small></button>
+  </nav>
+  <dialog id="app-dialog" class="app-dialog"></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script>
+    if (location.protocol === "file:") {
+      document.getElementById("launch-help").hidden = false;
+      document.querySelector(".app-shell").hidden = true;
+      document.querySelector(".mobile-nav").hidden = true;
+    }
+  </script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
