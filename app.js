@@ -1,7 +1,7 @@
 import { db } from "./db.js";
 import {
   accountBalance, accountFigures, accountName, budgetProgress, debtOutstanding as getDebtOutstanding, escapeHtml, expenseAmount, goalReserved, goalReservedByAccount,
-  formatDate, id, money, monthKey, parseDate, tagName, today, transactionInPeriod, transactionMatchesTag, transactionTagIds
+  formatDate, id, money, monthKey, parseDate, tagName, today, transactionInPeriod, transactionMatchesTag, transactionTagIds, txBalanceImpact
 } from "./domain.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -20,6 +20,7 @@ const state = {
   debtEvents: [],
   selectedAccounts: [],
   activityPeriod: "month",
+  activityDate: today(),
   activityFrom: `${monthKey()}-01`,
   activityTo: today(),
   activityAccount: "all",
@@ -30,6 +31,12 @@ const state = {
   statsTo: today(),
   statsAccounts: [],
   statsTags: [],
+  tagStatsType: "expense",
+  tagStatsPeriod: "month",
+  tagStatsDay: today(),
+  tagStatsFrom: `${monthKey()}-01`,
+  tagStatsTo: today(),
+  tagStatsTags: [],
   archivedVisible: false,
   forecastDate: today(),
   pendingConfirmation: null,
@@ -197,6 +204,60 @@ function updateActivityDateFilter(target, key) {
     else state.activityFrom = parsed;
     notify("El otro límite del rango se ha ajustado para mantener el orden de fechas.");
   }
+  render();
+}
+
+function updateTagStatsDateFilter(target, key) {
+  const parsed = parseDate(target.value);
+  if (!parsed) {
+    notify("Introduce una fecha válida en formato DD/MM/YYYY.");
+    render();
+    return;
+  }
+  state[key] = parsed;
+  if (state.tagStatsFrom > state.tagStatsTo) {
+    if (key === "tagStatsFrom") state.tagStatsTo = parsed;
+    else state.tagStatsFrom = parsed;
+    notify("El otro límite del rango se ha ajustado para mantener el orden de fechas.");
+  }
+  render();
+}
+
+function dateInSelectedPeriod(date, period, day, from, to) {
+  if (period === "today") return date === today();
+  if (period === "day") return date === day;
+  if (period === "range") return date >= from && date <= to;
+  return transactionInPeriod({ date }, period);
+}
+
+function dateInActivityPeriod(date) {
+  if (state.activityPeriod === "day") return date === state.activityDate;
+  if (state.activityPeriod === "month") return date.slice(0, 7) === state.activityDate.slice(0, 7);
+  if (state.activityPeriod === "year") return date.slice(0, 4) === state.activityDate.slice(0, 4);
+  return false;
+}
+
+function activityPeriodLabel() {
+  if (state.activityPeriod === "day") return formatDate(state.activityDate);
+  if (state.activityPeriod === "month") {
+    return new Intl.DateTimeFormat("es-ES", { month: "long", year: "numeric" }).format(new Date(`${state.activityDate.slice(0, 7)}-01T00:00:00`));
+  }
+  return state.activityDate.slice(0, 4);
+}
+
+function shiftActivityPeriod(offset) {
+  const date = new Date(`${state.activityDate}T00:00:00`);
+  if (state.activityPeriod === "day") date.setDate(date.getDate() + offset);
+  else if (state.activityPeriod === "month") {
+    date.setDate(1);
+    date.setMonth(date.getMonth() + offset);
+  } else if (state.activityPeriod === "year") {
+    date.setMonth(0, 1);
+    date.setFullYear(date.getFullYear() + offset);
+  }
+  const next = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  if (next > today()) state.activityDate = today();
+  else state.activityDate = next;
   render();
 }
 
@@ -512,8 +573,14 @@ function goalSourceLabel(goal) {
 
 function renderActivity() {
   const period = state.activityPeriod;
+  const canNavigate = ["day", "month", "year"].includes(period);
+  const isCurrentPeriod = canNavigate && dateInActivityPeriod(today());
   const transactions = [...state.transactions].filter((tx) =>
-    (period === "range" ? tx.date >= state.activityFrom && tx.date <= state.activityTo : transactionInPeriod(tx, period)) &&
+    (period === "range"
+      ? tx.date >= state.activityFrom && tx.date <= state.activityTo
+      : canNavigate
+        ? dateInActivityPeriod(tx.date)
+        : period === "all" || transactionInPeriod(tx, period)) &&
     (state.activityAccount === "all" || tx.accountId === state.activityAccount || tx.toAccountId === state.activityAccount) &&
     (state.activityTag === "all" || transactionMatchesTag(tx, state.activityTag)))
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
@@ -521,7 +588,8 @@ function renderActivity() {
   root.innerHTML = `${pageHeading("Actividad", "Movimientos", "Ingresos, gastos, traspasos y aportaciones a tus objetivos.", actions)}
     <section class="panel">
       <div class="filter-row">
-        <select class="filter-control" id="activity-period"><option value="month" ${period === "month" ? "selected" : ""}>Este mes</option><option value="year" ${period === "year" ? "selected" : ""}>Este año</option><option value="range" ${period === "range" ? "selected" : ""}>Rango personalizado</option><option value="all" ${period === "all" ? "selected" : ""}>Todo el historial</option></select>
+        <select class="filter-control" id="activity-period"><option value="day" ${period === "day" ? "selected" : ""}>Día</option><option value="month" ${period === "month" ? "selected" : ""}>Mes</option><option value="year" ${period === "year" ? "selected" : ""}>Año</option><option value="range" ${period === "range" ? "selected" : ""}>Rango personalizado</option><option value="all" ${period === "all" ? "selected" : ""}>Todo el historial</option></select>
+        ${canNavigate ? `<div class="period-navigation"><button class="period-arrow" type="button" data-action="shift-activity-period" data-offset="-1" aria-label="Periodo anterior">‹</button><strong>${escapeHtml(activityPeriodLabel())}</strong><button class="period-arrow" type="button" data-action="shift-activity-period" data-offset="1" aria-label="Periodo siguiente" ${isCurrentPeriod ? "disabled" : ""}>›</button></div>` : ""}
         ${period === "range" ? `<label class="date-filter">Desde ${dateInput("activityFrom", state.activityFrom, { id: "activity-from" })}</label><label class="date-filter">Hasta ${dateInput("activityTo", state.activityTo, { id: "activity-to" })}</label>` : ""}
         <select class="filter-control" id="activity-account"><option value="all">Todas las cuentas</option>${accountOptions(state.activityAccount)}</select>
         <select class="filter-control" id="activity-tag"><option value="all">Todas las etiquetas</option>${tagOptions(state.activityTag)}</select>
@@ -677,53 +745,129 @@ function renderStats() {
   let txs = state.transactions.filter((tx) => tx.confirmed && tx.date <= today() && inRange(tx) &&
     (!state.statsAccounts.length || state.statsAccounts.includes(tx.accountId) || state.statsAccounts.includes(tx.toAccountId)) &&
     (!state.statsTags.length || state.statsTags.some((tagId) => transactionMatchesTag(tx, tagId))));
-  const projectionEvents = state.transactions.filter((tx) =>
-    (tx.type === "income" || tx.type === "expense") && (tx.date >= today() || !tx.confirmed) && inRange({ date: tx.date < today() ? today() : tx.date }) &&
-    (!state.statsAccounts.length || state.statsAccounts.includes(tx.accountId)) &&
-    (!state.statsTags.length || state.statsTags.some((tagId) => transactionMatchesTag(tx, tagId)))
-  ).map((tx) => ({ date: tx.date < today() ? today() : tx.date, income: tx.type === "income" ? Number(tx.amount) : 0, expense: tx.type === "expense" ? expenseAmount(tx) : 0, cashExpense: tx.type === "expense" ? Number(tx.amount) : 0 }));
-  if (!state.statsTags.length) {
-    for (const debt of state.debts.filter((entry) => entry.direction === "owed_to_me" && (!state.statsAccounts.length || !entry.accountId || state.statsAccounts.includes(entry.accountId)))) {
-      const date = debt.date >= today() ? debt.date : today();
-      if (inRange({ date })) projectionEvents.push({ date, income: debtOutstanding(debt), expense: 0, cashExpense: 0 });
+  const projectionAccounts = getVisibleAccounts().filter((account) =>
+    !state.statsAccounts.length || state.statsAccounts.includes(account.id));
+  const projectionAccountIds = new Set(projectionAccounts.map((account) => account.id));
+  const projectionEvents = [];
+  const projectionSummaryEvents = [];
+  for (const tx of state.transactions) {
+    if (!tx.date) continue;
+    const matchesTags = !state.statsTags.length || state.statsTags.some((tagId) => transactionMatchesTag(tx, tagId));
+    const balanceChange = projectionAccounts.reduce((sum, account) => sum + txBalanceImpact(tx, account.id), 0);
+    if (tx.confirmed && tx.date <= today()) {
+      if (balanceChange || (matchesTags && (tx.type === "income" || tx.type === "expense"))) {
+        projectionEvents.push({
+          date: tx.date,
+          income: matchesTags && tx.type === "income" ? Number(tx.amount) : 0,
+          expense: matchesTags && tx.type === "expense" ? expenseAmount(tx) : 0,
+          cashExpense: matchesTags && tx.type === "expense" ? Number(tx.amount) : 0,
+          balanceChange
+        });
+      }
+    } else if (matchesTags && (tx.type === "income" || tx.type === "expense") && projectionAccountIds.has(tx.accountId)) {
+      const date = tx.date < today() ? today() : tx.date;
+      const event = {
+        date,
+        income: tx.type === "income" ? Number(tx.amount) : 0,
+        expense: tx.type === "expense" ? expenseAmount(tx) : 0,
+        cashExpense: tx.type === "expense" ? Number(tx.amount) : 0,
+        balanceChange: tx.type === "income" ? Number(tx.amount) : -Number(tx.amount)
+      };
+      projectionEvents.push(event);
+      if (inRange({ date })) projectionSummaryEvents.push(event);
     }
   }
-  const currentProjectionBalance = getVisibleAccounts()
-    .filter((account) => !state.statsAccounts.length || state.statsAccounts.includes(account.id))
+  if (!state.statsTags.length) {
+    for (const debt of state.debts.filter((entry) => entry.direction === "owed_to_me" &&
+      (!state.statsAccounts.length || !entry.accountId || state.statsAccounts.includes(entry.accountId)))) {
+      const date = debt.date >= today() ? debt.date : today();
+      const event = { date, income: debtOutstanding(debt), expense: 0, cashExpense: 0, balanceChange: debtOutstanding(debt) };
+      projectionEvents.push(event);
+      if (inRange({ date })) projectionSummaryEvents.push(event);
+    }
+  }
+  const currentProjectionBalance = projectionAccounts
     .reduce((sum, account) => sum + accountBalance(account, state.transactions), 0);
   const projectionByDate = new Map();
   for (const event of projectionEvents) {
-    const totals = projectionByDate.get(event.date) || { income: 0, expense: 0, cashExpense: 0 };
+    const totals = projectionByDate.get(event.date) || { income: 0, expense: 0, cashExpense: 0, balanceChange: 0 };
     totals.income += event.income;
     totals.expense += event.expense;
     totals.cashExpense += event.cashExpense;
+    totals.balanceChange += event.balanceChange;
     projectionByDate.set(event.date, totals);
   }
   const projectionDates = [...projectionByDate.keys()].sort();
-  let runningBalance = currentProjectionBalance;
-  const projectionBars = projectionDates.map((date) => {
+  const projectionEnd = state.statsPeriod === "today"
+    ? today()
+    : state.statsPeriod === "day"
+      ? state.statsDay
+      : state.statsPeriod === "range"
+        ? state.statsTo
+        : state.statsPeriod === "month"
+          ? `${monthKey()}-31`
+          : state.statsPeriod === "year"
+            ? `${new Date().getFullYear()}-12-31`
+            : "";
+  const projectionLabel = state.statsPeriod === "today"
+    ? "Hoy"
+    : state.statsPeriod === "day"
+      ? formatDate(state.statsDay)
+      : state.statsPeriod === "range"
+        ? `${formatDate(state.statsFrom)} – ${formatDate(state.statsTo)}`
+        : state.statsPeriod === "month"
+          ? new Intl.DateTimeFormat("es-ES", { month: "long", year: "numeric" }).format(new Date(`${monthKey()}-01T00:00:00`))
+          : state.statsPeriod === "year"
+            ? String(new Date().getFullYear())
+            : "Todo el historial";
+  let runningBalance = projectionAccounts.reduce((sum, account) => sum + (Number(account.openingBalance) || 0), 0);
+  const periodTotals = { income: 0, expense: 0, cashExpense: 0, balanceChange: 0 };
+  let hasPeriodEvents = false;
+  for (const date of projectionDates) {
+    if (projectionEnd && date > projectionEnd) break;
     const totals = projectionByDate.get(date);
-    runningBalance += totals.income - totals.cashExpense;
-    return { date, ...totals, balance: runningBalance };
-  });
+    runningBalance += totals.balanceChange;
+    if (inRange({ date })) {
+      hasPeriodEvents = true;
+      periodTotals.income += totals.income;
+      periodTotals.expense += totals.expense;
+      periodTotals.cashExpense += totals.cashExpense;
+      periodTotals.balanceChange += totals.balanceChange;
+    }
+  }
+  const projectionBars = hasPeriodEvents
+    ? [{ date: projectionLabel, ...periodTotals, balance: runningBalance }]
+    : [{ date: projectionLabel, income: 0, expense: 0, cashExpense: 0, balanceChange: 0, balance: 0 }];
   const projectionScale = Math.max(1, ...projectionBars.flatMap((entry) => [entry.income, entry.expense, Math.abs(entry.balance)]));
-  const projectionChart = projectionBars.length ? projectionBars.map((entry) => {
-    const label = formatDate(entry.date);
+  const projectionChart = projectionBars.map((entry) => {
+    const label = entry.date;
     return `<div class="projection-group" aria-label="${escapeHtml(label)}: ingresos ${money(entry.income)}, gastos ${money(entry.expense)}, balance proyectado ${money(entry.balance)}"><div class="projection-bars"><span class="projection-bar income" style="height:${Math.max(3, entry.income / projectionScale * 100)}%" title="Ingresos ${money(entry.income)}"></span><span class="projection-bar expense" style="height:${Math.max(3, entry.expense / projectionScale * 100)}%" title="Gastos ${money(entry.expense)}"></span><span class="projection-bar balance" style="height:${Math.max(3, Math.abs(entry.balance) / projectionScale * 100)}%" title="Balance ${money(entry.balance)}"></span></div><small>${escapeHtml(label)}</small><b>${money(entry.balance)}</b></div>`;
-  }).join("") : emptyState("Sin previsiones para este periodo", "Los movimientos previstos y las deudas pendientes aparecerán aquí.");
+  }).join("");
   const income = txs.filter((tx) => tx.type === "income").reduce((sum, tx) => sum + Number(tx.amount), 0);
   const expense = txs.filter((tx) => tx.type === "expense" || tx.type === "debt_payment").reduce((sum, tx) => sum + expenseAmount(tx), 0);
-  const projectedIncome = projectionEvents.reduce((sum, event) => sum + event.income, 0);
-  const projectedExpense = projectionEvents.reduce((sum, event) => sum + event.expense, 0);
-  const projectedBalance = projectionBars.at(-1)?.balance ?? currentProjectionBalance;
+  const projectedIncome = projectionSummaryEvents.reduce((sum, event) => sum + event.income, 0);
+  const projectedExpense = projectionSummaryEvents.reduce((sum, event) => sum + event.expense, 0);
+  const projectedBalance = hasPeriodEvents ? projectionBars[0].balance : currentProjectionBalance;
   const saving = txs.filter((tx) => tx.type === "saving").reduce((sum, tx) => sum + Number(tx.amount), 0);
+  const tagStatsDateMatches = (tx) => dateInSelectedPeriod(
+    tx.date, state.tagStatsPeriod, state.tagStatsDay, state.tagStatsFrom, state.tagStatsTo
+  );
+  const tagStatsTransactions = state.transactions.filter((tx) =>
+    tx.confirmed && tx.date <= today() &&
+    (state.tagStatsType === "income" ? tx.type === "income" : tx.type === "expense" || tx.type === "debt_payment") &&
+    tagStatsDateMatches(tx) &&
+    (!state.tagStatsTags.length || state.tagStatsTags.some((tagId) => transactionMatchesTag(tx, tagId))));
   const byTag = new Map();
-  for (const tx of txs.filter((entry) => entry.type === "expense" || entry.type === "debt_payment")) {
-    const tagIds = transactionTagIds(tx);
+  for (const tx of tagStatsTransactions) {
+    const transactionTags = transactionTagIds(tx);
+    const tagIds = state.tagStatsTags.length
+      ? transactionTags.filter((tagId) => state.tagStatsTags.includes(tagId))
+      : transactionTags;
     for (const tagId of tagIds.length ? tagIds : [null]) {
       const tag = state.tags.find((entry) => entry.id === tagId);
       const name = tag?.parentId ? `${tag.parentName || tagName(tag.parentId, state.tags)} › ${tag.name}` : tag?.name || "Sin etiqueta";
-      byTag.set(name, (byTag.get(name) || 0) + expenseAmount(tx));
+      const amount = state.tagStatsType === "income" ? Number(tx.amount) : expenseAmount(tx);
+      byTag.set(name, (byTag.get(name) || 0) + amount);
     }
   }
   const topTags = [...byTag.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
@@ -739,7 +883,20 @@ function renderStats() {
     : state.statsPeriod === "range"
       ? `<label class="date-filter">Desde ${dateInput("statsFrom", state.statsFrom, { id: "stats-from", required: true })}</label><label class="date-filter">Hasta ${dateInput("statsTo", state.statsTo, { id: "stats-to", required: true })}</label>`
       : "";
-  root.innerHTML = `${pageHeading("Entiende tus hábitos", "Estadísticas", "Una lectura clara de tus ingresos, gastos, etiquetas y decisiones.", `<button class="button button-secondary" data-action="export-data">↓ Exportar copia</button>`)}
+  const tagStatsDateControls = state.tagStatsPeriod === "day"
+    ? dateInput("tagStatsDay", state.tagStatsDay, { id: "tag-stats-day", required: true })
+    : state.tagStatsPeriod === "range"
+      ? `<label class="date-filter">Desde ${dateInput("tagStatsFrom", state.tagStatsFrom, { id: "tag-stats-from", required: true })}</label><label class="date-filter">Hasta ${dateInput("tagStatsTo", state.tagStatsTo, { id: "tag-stats-to", required: true })}</label>`
+      : "";
+  const tagStatsTags = state.tags
+    .filter((tag) => !tag.kind || tag.kind === state.tagStatsType)
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  const tagStatsTagPicker = `<details class="tag-stats-filter" ${state.tagStatsTags.length ? "open" : ""}><summary>${state.tagStatsTags.length ? `${state.tagStatsTags.length} etiqueta${state.tagStatsTags.length === 1 ? "" : "s"} seleccionada${state.tagStatsTags.length === 1 ? "" : "s"}` : "Todas las etiquetas"}</summary><div class="tag-stats-options"><label class="tag-option"><input type="checkbox" data-tag-stats-all ${state.tagStatsTags.length ? "" : "checked"}><span>Todas las etiquetas</span></label>${tagStatsTags.map((tag) => {
+    const parents = tagParents(tag).map((parentId) => tagName(parentId, state.tags));
+    const label = [...parents, tag.name].join(" › ");
+    return `<label class="tag-option"><input type="checkbox" name="tag-stats-tag" value="${escapeHtml(tag.id)}" ${state.tagStatsTags.includes(tag.id) ? "checked" : ""}><span>${escapeHtml(label)}</span></label>`;
+  }).join("") || `<span class="field-hint">Aún no hay etiquetas de ${state.tagStatsType === "income" ? "ingresos" : "gastos"}.</span>`}</div></details>`;
+  root.innerHTML = `${pageHeading("Entiende tus hábitos", "Estadísticas", "Una lectura clara de tus ingresos, gastos, etiquetas y decisiones.")}
     <section class="panel">
       <div class="filter-row"><select class="filter-control" id="stats-period"><option value="today" ${state.statsPeriod === "today" ? "selected" : ""}>Hoy</option><option value="month" ${state.statsPeriod === "month" ? "selected" : ""}>Este mes</option><option value="year" ${state.statsPeriod === "year" ? "selected" : ""}>Este año</option><option value="day" ${state.statsPeriod === "day" ? "selected" : ""}>Un día</option><option value="range" ${state.statsPeriod === "range" ? "selected" : ""}>Rango personalizado</option><option value="all" ${state.statsPeriod === "all" ? "selected" : ""}>Todo el historial</option></select>${dateControls}
       <button class="filter-control" type="button" data-action="stats-accounts">${state.statsAccounts.length ? `${state.statsAccounts.length} cuenta${state.statsAccounts.length === 1 ? "" : "s"}` : "Todas las cuentas"}</button>
@@ -758,8 +915,14 @@ function renderStats() {
       </div>
     </section>
     <section class="two-panels">
-      <article class="panel"><div class="panel-heading"><div><h2>Gastos por etiqueta</h2><p>Las etiquetas principales y subetiquetas se filtran por igual</p></div></div>
-        ${topTags.length ? topTags.map(([name, value]) => `<div class="budget-item"><div class="budget-line"><strong>${escapeHtml(name)}</strong><span>${money(value)}</span></div><div class="progress-track"><div class="progress-fill" style="width:${value / maxTag * 100}%"></div></div></div>`).join("") : emptyState("Aún sin datos", "Tus gastos aparecerán al registrar movimientos.")}</article>
+      <article class="panel"><div class="panel-heading"><div><h2>${state.tagStatsType === "income" ? "Ingresos" : "Gastos"} por etiqueta</h2><p>Filtra por tipo, una o varias etiquetas y periodo</p></div></div>
+        <div class="filter-row tag-stats-controls">
+          <select class="filter-control" id="tag-stats-type"><option value="expense" ${state.tagStatsType === "expense" ? "selected" : ""}>Gastos</option><option value="income" ${state.tagStatsType === "income" ? "selected" : ""}>Ingresos</option></select>
+          ${tagStatsTagPicker}
+          <select class="filter-control" id="tag-stats-period"><option value="today" ${state.tagStatsPeriod === "today" ? "selected" : ""}>Hoy</option><option value="month" ${state.tagStatsPeriod === "month" ? "selected" : ""}>Este mes</option><option value="year" ${state.tagStatsPeriod === "year" ? "selected" : ""}>Este año</option><option value="day" ${state.tagStatsPeriod === "day" ? "selected" : ""}>Un día</option><option value="range" ${state.tagStatsPeriod === "range" ? "selected" : ""}>Rango personalizado</option><option value="all" ${state.tagStatsPeriod === "all" ? "selected" : ""}>Todo el historial</option></select>
+          ${tagStatsDateControls}
+        </div>
+        ${topTags.length ? topTags.map(([name, value]) => `<div class="budget-item"><div class="budget-line"><strong>${escapeHtml(name)}</strong><span>${money(value)}</span></div><div class="progress-track"><div class="progress-fill" style="width:${value / maxTag * 100}%"></div></div></div>`).join("") : emptyState("Aún sin datos", `Tus ${state.tagStatsType === "income" ? "ingresos" : "gastos"} aparecerán al registrar movimientos con estos filtros.`)}</article>
       <article class="panel"><div class="panel-heading"><div><h2>Inteligencia financiera</h2><p>Ideas automáticas a partir de tus datos locales</p></div><span>✦</span></div>${insight}</article>
     </section>
     <section class="panel" style="margin-top:19px"><div class="panel-heading"><div><h2>Auditoría del historial</h2><p>Los registros ocultos siguen incluidos en tus métricas.</p></div></div>
@@ -798,7 +961,7 @@ function buildInsight(txs) {
 function renderSettings() {
   const tags = state.tags.filter((tag) => tagRole(tag, "main"));
   const accounts = state.accounts.filter((account) => !account.archived);
-  root.innerHTML = `${pageHeading("Privacidad y control", "Ajustes y copias", "Gestiona tus cuentas y etiquetas, y conserva siempre una copia portable de tus datos.", `<button class="button button-primary" data-action="export-data">↓ Exportar datos</button>`)}
+  root.innerHTML = `${pageHeading("Privacidad y control", "Ajustes y copias", "Gestiona tus cuentas y etiquetas, y conserva siempre una copia portable de tus datos.")}
     <section class="panel settings-section"><div class="panel-heading"><div><h2>Cuentas</h2><p>Elimina una cuenta dando de baja o redistribuyendo su saldo.</p></div><button class="button button-secondary" data-action="new-account">＋ Añadir cuenta</button></div>
       ${accounts.length ? accounts.map((account) => {
         const figures = accountFigures(account, accounts, state.transactions, state.goals, state.debts);
@@ -817,7 +980,7 @@ function renderSettings() {
         };
         return `<div class="tag-section"><h3>${kind === "expense" ? "Gastos" : "Ingresos"}</h3>${group.length ? group.map((tag) => renderTagTree(tag)).join("") : emptyState("Aún sin etiquetas", `Crea etiquetas independientes para ${kind === "expense" ? "gastos" : "ingresos"}.`)}</div>`;
       }).join("")}</section>
-    <section class="panel settings-section"><h2>Copia y recuperación</h2><p>La base de datos vive en IndexedDB de este navegador. Exporta una copia JSON periódicamente y guárdala en un lugar seguro. Al importar se reemplazarán los datos locales actuales.</p>
+    <section class="panel settings-section"><h2>Copia y recuperación</h2><p>Exporta cuentas, movimientos, etiquetas, presupuestos, objetivos, deudas e historial en un archivo JSON. Al importar una copia se reemplazarán todos los datos locales actuales; conserva una copia reciente antes de hacerlo.</p>
       <div class="heading-actions"><button class="button button-primary" data-action="export-data">Descargar copia JSON</button><label class="button button-secondary file-button">Importar copia<input type="file" id="import-file" accept="application/json,.json"></label></div>
       <div class="insight-card"><strong>Privacidad local</strong><p>No hay backend ni sincronización en la nube. Si borras los datos del navegador o pierdes el dispositivo, la copia exportada será necesaria para recuperar la información.</p></div></section>`;
 }
@@ -2086,6 +2249,7 @@ async function handleAction(action, target) {
   else if (action === "select-accounts") accountFilterDialog("home");
   else if (action === "stats-accounts") accountFilterDialog("stats");
   else if (action === "stats-tags") tagFilterDialog();
+  else if (action === "shift-activity-period") shiftActivityPeriod(Number(target.dataset.offset));
   else if (action === "new-debt") debtForm(target.dataset.direction || "i_owe");
   else if (action === "edit-debt") {
     const debt = state.debts.find((entry) => entry.id === idValue);
@@ -2300,16 +2464,34 @@ document.addEventListener("change", (event) => {
     const all = $('input[name="all"]', target.form);
     if (target.name === "all" && target.checked) $$('input[name="accountId"]', target.form).forEach((input) => { input.checked = false; });
     else if (target.name === "accountId" && target.checked && all) all.checked = false;
+  } else if (target.matches('[data-tag-stats-all]')) {
+    state.tagStatsTags = [];
+    render();
+  } else if (target.name === "tag-stats-tag") {
+    state.tagStatsTags = $$('input[name="tag-stats-tag"]:checked').map((input) => input.value);
+    render();
   } else if (target.form?.dataset.form === "tag-filter") {
     const all = $('input[name="all"]', target.form);
     if (target.name === "all" && target.checked) $$('input[name="tagId"]', target.form).forEach((input) => { input.checked = false; });
     else if (target.name === "tagId" && target.checked && all) all.checked = false;
-  } else if (target.id === "activity-period") { state.activityPeriod = target.value; render(); }
+  } else if (target.id === "activity-period") {
+    state.activityPeriod = target.value;
+    state.activityDate = today();
+    render();
+  }
   else if (target.id === "activity-from") updateActivityDateFilter(target, "activityFrom");
   else if (target.id === "activity-to") updateActivityDateFilter(target, "activityTo");
   else if (target.id === "activity-account") { state.activityAccount = target.value; render(); }
   else if (target.id === "activity-tag") { state.activityTag = target.value; render(); }
   else if (target.id === "stats-period") { state.statsPeriod = target.value; render(); }
+  else if (target.id === "tag-stats-type") {
+    state.tagStatsType = target.value;
+    state.tagStatsTags = [];
+    render();
+  } else if (target.id === "tag-stats-period") { state.tagStatsPeriod = target.value; render(); }
+  else if (target.id === "tag-stats-day") updateTagStatsDateFilter(target, "tagStatsDay");
+  else if (target.id === "tag-stats-from") updateTagStatsDateFilter(target, "tagStatsFrom");
+  else if (target.id === "tag-stats-to") updateTagStatsDateFilter(target, "tagStatsTo");
   else if (target.id === "stats-day") updateDateFilter(target, "statsDay");
   else if (target.id === "stats-from") updateDateFilter(target, "statsFrom");
   else if (target.id === "stats-to") updateDateFilter(target, "statsTo");

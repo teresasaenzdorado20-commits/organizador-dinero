@@ -25,7 +25,7 @@ En un iPhone, abre la URL HTTPS en Safari, pulsa **Compartir → Añadir a panta
 
 La base se llama `organizador-dinero` y actualmente tiene la versión 2. La versión 2 añade las stores `debts` y `debtEvents`; las cuentas, movimientos y datos previos se conservan. Se aceptan copias JSON de la versión 1 y se exportan copias nuevas en la versión 2. La actualización del esquema se declara en `db.js` dentro de `onupgradeneeded`; las versiones futuras deben incrementar `DB_VERSION`, añadir o indexar stores y transformar registros con cursores dentro de esa transacción. No borres stores ni registros como parte de una migración. Los objetos son flexibles y pueden incorporar campos nuevos sin reescribir el historial.
 
-Al eliminar una cuenta se puede dar de baja su saldo o repartirlo entre otras cuentas activas. La cuenta se elimina de la lista de cuentas; sus movimientos históricos se conservan. Los presupuestos y objetivos se pueden ocultar, editar o eliminar. Las copias JSON incluyen todas las stores y pueden importarse desde **Ajustes y copias**; la importación reemplaza la base local y pide confirmación en un panel propio.
+Al eliminar una cuenta se puede dar de baja su saldo o repartirlo entre otras cuentas activas. La cuenta se elimina de la lista de cuentas; sus movimientos históricos se conservan. Los presupuestos y objetivos se pueden ocultar, editar o eliminar. Los controles para exportar e importar copias JSON están únicamente en **Ajustes y copias**. Las copias incluyen todas las stores; la importación reemplaza la base local y pide confirmación en un panel propio.
 
 ## Reglas principales
 
@@ -41,6 +41,7 @@ Al eliminar una cuenta se puede dar de baja su saldo o repartirlo entre otras cu
 - Al registrar como comprada una meta completada, sus etiquetas aparecen en cascada desde el inicio y el nombre del objetivo se propone como nota del gasto.
 - Los calendarios son paneles flotantes propios, anclados al campo de fecha y situados dentro de la ventana visible; los formularios de compra y presupuesto permiten crear etiquetas principales o subetiquetas sin perder los datos ya introducidos.
 - Estadísticas permiten combinar varias cuentas y etiquetas, elegir hoy, mes, año, un día o un rango personalizado.
+- El gráfico de flujo agrupa ingresos, gastos y balance en una sola barra para el periodo seleccionado; «Todo el historial» incluye los movimientos confirmados y las previsiones. Los gastos e ingresos por etiqueta tienen filtros independientes de tipo, etiquetas múltiples y periodo. En Movimientos se puede navegar por día, mes o año con flechas.
 - Un gasto dividido conserva el importe completo pagado para cuadrar el saldo de la cuenta, pero solo cuenta tu parte en gastos, presupuestos y gráficos. Las porciones adelantadas crean deudas agrupables por persona.
 - Las deudas cruzadas con una persona se compensan automáticamente. Lo que te deben reduce temporalmente el saldo disponible hasta que se abone o compense.
 - En una deuda compensada, el movimiento de gasto conserva el importe bruto; la compensación se registra como un ingreso de ajuste para que el saldo de la cuenta solo refleje el pago neto.
@@ -56,4 +57,4 @@ Al eliminar una cuenta se puede dar de baja su saldo o repartirlo entre otras cu
 
 ## Copias y privacidad
 
-IndexedDB pertenece al perfil del navegador/dispositivo. Borrar los datos de Safari o del navegador elimina la base local. Exporta copias JSON periódicas y guárdalas fuera del dispositivo. No se incluye cifrado con contraseña ni sincronización: protege el acceso al dispositivo y a las copias.
+IndexedDB pertenece al perfil del navegador/dispositivo. Cada cambio se guarda automáticamente y se vuelve a cargar al abrir la aplicación; publicar una nueva versión o actualizar los archivos no borra la base local. El service worker solo renueva la caché de la aplicación y no elimina los datos de IndexedDB. Borrar los datos de Safari o del navegador sí elimina la base local. Exporta copias JSON periódicas y guárdalas fuera del dispositivo. No se incluye cifrado con contraseña ni sincronización: protege el acceso al dispositivo y a las copias.
