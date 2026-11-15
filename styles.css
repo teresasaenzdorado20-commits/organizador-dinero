@@ -20,6 +20,7 @@ body:has(.launch-help:not([hidden])) { min-height: 100vh; display: grid; place-i
 .launch-help { max-width: 520px; padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: #fff; box-shadow: var(--shadow); line-height: 1.7; font-size: 15px; }
 .launch-help strong { color: var(--green-dark); }
 button, input, select, textarea { font: inherit; }
+input, select, textarea { pointer-events: auto; }
 button { cursor: pointer; }
 .app-shell { min-height: 100vh; display: flex; }
 .sidebar { width: 248px; flex: 0 0 248px; background: #fff; border-right: 1px solid var(--line); padding: 27px 17px 18px; display: flex; flex-direction: column; }
@@ -58,7 +59,7 @@ h1 { font-family: "Avenir Next", -apple-system, sans-serif; font-size: clamp(26p
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(250px, .85fr); gap: 19px; }
 .panel, .card { border: 1px solid var(--line); border-radius: 17px; background: var(--paper); box-shadow: var(--shadow); }
 .balance-card { background: var(--green-dark); color: #fff; border: 0; min-height: 218px; padding: 26px 29px; overflow: hidden; position: relative; }
-.balance-card:after { content: ""; position: absolute; width: 250px; height: 250px; border: 1px solid #ffffff17; border-radius: 50%; right: -80px; top: -105px; box-shadow: 0 0 0 30px #ffffff08, 0 0 0 70px #ffffff06; }
+.balance-card:after { content: ""; position: absolute; width: 250px; height: 250px; border: 1px solid #ffffff17; border-radius: 50%; right: -80px; top: -105px; box-shadow: 0 0 0 30px #ffffff08, 0 0 0 70px #ffffff06; pointer-events: none; }
 .balance-top { display: flex; justify-content: space-between; color: #bed4c9; font-size: 12px; position: relative; z-index: 1; }
 .balance-value { font-family: "Avenir Next", -apple-system, sans-serif; font-size: clamp(34px, 4vw, 46px); letter-spacing: -.055em; font-weight: 700; margin: 27px 0 8px; position: relative; z-index: 1; }
 .balance-split { display: flex; gap: 18px; font-size: 12px; color: #c9ded2; position: relative; z-index: 1; }
@@ -273,6 +274,7 @@ h1 { font-family: "Avenir Next", -apple-system, sans-serif; font-size: clamp(26p
   .account-summary { padding: 18px 22px; }
 }
 @media (max-width: 650px) {
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px; }
   .app-shell { display: block; }
   .sidebar { display: none; }
   .main-content { padding-bottom: 72px; }
