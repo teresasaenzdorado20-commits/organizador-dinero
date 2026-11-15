@@ -115,6 +115,13 @@ h1 { font-family: "Avenir Next", -apple-system, sans-serif; font-size: clamp(26p
 .content-list { overflow: hidden; }
 .transaction-row { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-top: 1px solid #f0f2ef; }
 .transaction-row:first-of-type { border-top: 0; }
+.pending-movements .transaction-row { display: grid; grid-template-columns: 31px minmax(0, 1fr) max-content; grid-template-areas: "icon details amount" ". actions actions"; align-items: start; column-gap: 12px; row-gap: 8px; }
+.pending-movements .account-icon { grid-area: icon; }
+.pending-movements .transaction-meta { grid-area: details; overflow-wrap: anywhere; }
+.pending-movements .transaction-meta strong { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.pending-movements .transaction-meta small { overflow-wrap: anywhere; }
+.pending-movements .transaction-amount { grid-area: amount; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.pending-movements .transaction-actions { grid-area: actions; min-width: 0; width: 100%; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .transaction-meta { min-width: 0; flex: 1; }
 .transaction-meta strong { display: block; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .transaction-meta small { display: block; color: var(--muted); font-size: 10px; margin-top: 4px; }

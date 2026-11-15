@@ -496,6 +496,17 @@ function transactionRow(tx, options = {}) {
   </div>`;
 }
 
+function pendingDebtRow(debt) {
+  const incoming = debt.direction === "owed_to_me";
+  const amount = debtOutstanding(debt);
+  return `<div class="transaction-row pending-debt-row">
+    <div class="account-icon" style="background:${incoming ? "#e4f2e9" : "#f7e2e4"}">${incoming ? "↙" : "↗"}</div>
+    <div class="transaction-meta"><strong>${incoming ? "Te deben" : "Debes"} · ${escapeHtml(debt.person)}</strong><small>${escapeHtml(debt.description || (debt.source === "expense" ? "Cuenta compartida" : "Deuda registrada"))} · Sin fecha prevista</small></div>
+    <div class="transaction-amount ${incoming ? "positive" : "negative"}">${incoming ? "+" : "−"}${money(amount)}<small class="pill future">Pendiente</small></div>
+    <div class="transaction-actions"><button class="button button-quiet" type="button" data-view="debts">Ver deuda</button></div>
+  </div>`;
+}
+
 function activeOverspentBudgets() {
   const currentMonth = monthKey();
   return state.budgets.filter((budget) => !budget.hidden && budget.period === currentMonth && budgetProgress(budget, state.transactions) > budget.amount);
@@ -532,16 +543,19 @@ function renderHome() {
       state.pendingPeriod === "year" && tx.date.slice(0, 4) === String(new Date().getFullYear()) ||
       state.pendingPeriod === "range" && tx.date >= state.pendingFrom && tx.date <= state.pendingTo)
   ).sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  const pendingDebts = state.debts.filter((debt) =>
+    ["owed_to_me", "i_owe"].includes(debt.direction) && debtOutstanding(debt) > .005);
   const pendingTotal = forecastMovements.reduce((sum, tx) =>
-    sum + (tx.type === "income" ? Number(tx.amount) : -Number(tx.amount)), 0);
+    sum + (tx.type === "income" ? Number(tx.amount) : -Number(tx.amount)), 0) +
+    pendingDebts.reduce((sum, debt) => sum + (debt.direction === "owed_to_me" ? debtOutstanding(debt) : -debtOutstanding(debt)), 0);
   const pendingDateControls = state.pendingPeriod === "range"
     ? `<label class="date-filter">Desde ${dateInput("pendingFrom", state.pendingFrom, { id: "pending-from" })}</label><label class="date-filter">Hasta ${dateInput("pendingTo", state.pendingTo, { id: "pending-to" })}</label>`
     : "";
   const pendingPeriodDescription = state.pendingPeriod === "all"
-    ? "Todos los ingresos y gastos pendientes a futuro, sin límite de fecha."
+    ? "Todos los movimientos y deudas pendientes, sin límite de fecha."
     : state.pendingPeriod === "range"
-      ? `Movimientos pendientes entre ${formatDate(state.pendingFrom)} y ${formatDate(state.pendingTo)}.`
-      : `Movimientos pendientes de ${state.pendingPeriod === "today" ? "hoy" : state.pendingPeriod === "month" ? "este mes" : "este año"}.`;
+      ? `Movimientos entre ${formatDate(state.pendingFrom)} y ${formatDate(state.pendingTo)}. Las deudas sin fecha prevista también se incluyen.`
+      : `Movimientos pendientes de ${state.pendingPeriod === "today" ? "hoy" : state.pendingPeriod === "month" ? "este mes" : "este año"}. Las deudas sin fecha prevista también se incluyen.`;
   const budgetItems = state.budgets.filter((budget) => !budget.hidden && budget.period === monthKey()).slice(0, 4);
   root.innerHTML = `
     ${pageHeading("Tu dinero, más claro", "Hola, ¿cómo va tu mes?", "Un vistazo sencillo a lo que tienes y a lo que estás construyendo.",
@@ -562,14 +576,16 @@ function renderHome() {
         }).join("") : emptyState("Empieza con una cuenta", "Añade tu monedero o cuenta bancaria para empezar.", `<button class="button button-primary" data-action="new-account">Crear mi primera cuenta</button>`)}
       </article>
     </section>
-    <section class="panel" style="margin-top:19px">
+    <section class="panel pending-movements" style="margin-top:19px">
       <div class="panel-heading"><div><h2>Movimientos previstos</h2><p>${escapeHtml(pendingPeriodDescription)}</p></div></div>
       <div class="filter-row forecast-filters">
         <select class="filter-control" id="pending-period"><option value="all" ${state.pendingPeriod === "all" ? "selected" : ""}>Todos los pendientes</option><option value="today" ${state.pendingPeriod === "today" ? "selected" : ""}>Hoy</option><option value="month" ${state.pendingPeriod === "month" ? "selected" : ""}>Este mes</option><option value="year" ${state.pendingPeriod === "year" ? "selected" : ""}>Este año</option><option value="range" ${state.pendingPeriod === "range" ? "selected" : ""}>Rango personalizado</option></select>
         ${pendingDateControls}
       </div>
       <div class="forecast-total">${money(pendingTotal)}</div>
-      ${forecastMovements.length ? forecastMovements.map((tx) => transactionRow(tx)).join("") : emptyState("Sin movimientos previstos", "No hay ingresos ni gastos pendientes con este periodo.")}
+      ${forecastMovements.length || pendingDebts.length
+        ? `${forecastMovements.map((tx) => transactionRow(tx)).join("")}${pendingDebts.map(pendingDebtRow).join("")}`
+        : emptyState("Sin movimientos previstos", "No hay ingresos, gastos ni deudas pendientes con este periodo.")}
     </section>
     <section class="two-panels">
       <article class="panel">
