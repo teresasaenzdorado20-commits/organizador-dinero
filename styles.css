@@ -232,12 +232,11 @@ h1 { font-family: "Avenir Next", -apple-system, sans-serif; font-size: clamp(26p
 .projection-legend span:before { background: #75ad8c; }
 .projection-legend span:nth-child(2):before { background: #e7a46d; }
 .projection-legend span:last-child:before { background: #697db3; }
-.tag-picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 7px; padding-top: 6px; }
-.tag-option { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; color: #536159; font-size: 11px; }
-.tag-option input { accent-color: var(--green); }
+.tag-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-top: 6px; }
+.tag-option { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0; border: 0; color: #536159; font-size: 11px; cursor: pointer; }
+.field .tag-option input { flex: 0 0 16px; width: 16px; height: 16px; margin: 0; padding: 0; border: 0; background: transparent; accent-color: var(--green); }
 .tag-option input:disabled { cursor: not-allowed; }
 .tag-option:has(input:disabled) { opacity: .55; }
-.tag-picker .button { grid-column: 1 / -1; justify-self: start; }
 .tag-cascade { display: grid; gap: 9px; }
 .tag-cascade > strong { margin-top: 5px; font-size: 11px; }
 .tag-cascade .tag-picker { padding-top: 0; }
