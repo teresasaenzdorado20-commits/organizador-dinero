@@ -22,7 +22,7 @@ body:has(.launch-help:not([hidden])) { min-height: 100vh; display: grid; place-i
 button, input, select, textarea { font: inherit; }
 input, select, textarea { pointer-events: auto; }
 button { cursor: pointer; }
-.app-shell { min-height: 100vh; display: flex; }
+.app-shell { min-height: 100vh; min-height: 100dvh; display: flex; }
 .sidebar { width: 248px; flex: 0 0 248px; background: #fff; border-right: 1px solid var(--line); padding: 27px 17px 18px; display: flex; flex-direction: column; }
 .brand { display: flex; align-items: center; gap: 11px; padding: 0 12px; color: var(--ink); text-decoration: none; font-family: "Avenir Next", -apple-system, sans-serif; font-size: 15px; }
 .brand strong, .brand small { display: block; line-height: 1.15; }
@@ -274,7 +274,7 @@ h1 { font-family: "Avenir Next", -apple-system, sans-serif; font-size: clamp(26p
   .account-summary { padding: 18px 22px; }
 }
 @media (max-width: 650px) {
-  input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px; }
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px !important; transition: none; }
   .app-shell { display: block; }
   .sidebar { display: none; }
   .main-content { padding-bottom: 72px; }
@@ -315,9 +315,9 @@ h1 { font-family: "Avenir Next", -apple-system, sans-serif; font-size: clamp(26p
   .filter-control { flex: 1; min-width: 120px; }
   .transaction-actions { flex-direction: column; }
   .cashflow-bars { gap: 10px; }
-  .app-dialog { position: fixed; inset: auto 0 0; margin: 0; width: 100%; max-width: none; max-height: min(90dvh, 780px); border-radius: 20px 20px 0 0; padding-bottom: env(safe-area-inset-bottom); animation: bottom-sheet-in .2s ease-out; }
+  .app-dialog { position: fixed; inset: auto 0 0; margin: 0; width: 100%; max-width: none; max-height: min(90vh, 780px); max-height: min(90dvh, 780px); border-radius: 20px 20px 0 0; padding-bottom: env(safe-area-inset-bottom); animation: none; }
   .app-dialog::backdrop { backdrop-filter: blur(3px); }
-  .dialog-body { max-height: calc(90dvh - 75px); padding-bottom: max(19px, env(safe-area-inset-bottom)); }
+  .dialog-body { max-height: calc(90vh - 75px); max-height: calc(90dvh - 75px); padding-bottom: max(19px, env(safe-area-inset-bottom)); }
   .form-footer { position: sticky; bottom: -19px; padding: 12px 0 max(8px, env(safe-area-inset-bottom)); background: #fff; }
   .transaction-actions { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; }
   .transaction-actions .button { padding: 8px; font-size: 10px; }
