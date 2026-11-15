@@ -98,12 +98,16 @@ h1 { font-family: "Avenir Next", -apple-system, sans-serif; font-size: clamp(26p
 .progress-fill { height: 100%; border-radius: inherit; background: #6ea987; }
 .progress-fill.over { background: #d45a52; }
 .progress-fill.warn { background: #e6a25f; }
-.goal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.goal-card { padding: 15px; border: 1px solid #edf0ec; border-radius: 13px; }
+.goal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; min-width: 0; }
+.goal-grid > * { min-width: 0; }
+.goal-card { min-width: 0; overflow: hidden; overflow-wrap: anywhere; padding: 15px; border: 1px solid #edf0ec; border-radius: 13px; }
 .goal-icon { width: 35px; height: 35px; border-radius: 11px; display: grid; place-items: center; font-size: 18px; margin-bottom: 11px; }
-.goal-card strong { display: block; font-size: 12px; }
-.goal-card small { display: block; color: var(--muted); font-size: 10px; margin: 4px 0 10px; }
-.goal-amounts { display: flex; justify-content: space-between; color: #67736d; font-size: 10px; margin-top: 7px; }
+.goal-card strong { display: block; min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
+.goal-card small { display: block; min-width: 0; color: var(--muted); font-size: 10px; margin: 4px 0 10px; overflow-wrap: anywhere; }
+.goal-amounts { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; min-width: 0; color: #67736d; font-size: 10px; margin-top: 7px; }
+.goal-amounts > * { min-width: 0; overflow-wrap: anywhere; }
+.goal-card .heading-actions { flex-wrap: wrap; justify-content: flex-start; min-width: 0; }
+.goal-card .heading-actions .button { flex: 1 1 92px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .goal-alert, .alert-banner { display: flex; align-items: center; gap: 10px; border: 1px solid #f1c7c4; background: #fff3f2; color: #a23e39; border-radius: 12px; padding: 13px 15px; margin-bottom: 17px; font-size: 12px; }
 .alert-bang { width: 22px; height: 22px; display: grid; place-items: center; background: #c94d46; color: #fff; border-radius: 50%; font-weight: 800; flex: 0 0 auto; }
 .alert-banner > div { flex: 1; }

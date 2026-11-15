@@ -38,6 +38,9 @@ const state = {
   tagStatsTo: today(),
   tagStatsTags: [],
   archivedVisible: false,
+  pendingPeriod: "all",
+  pendingFrom: today(),
+  pendingTo: today(),
   forecastDate: today(),
   pendingConfirmation: null,
   tagReturn: null,
@@ -202,6 +205,22 @@ function updateActivityDateFilter(target, key) {
   if (state.activityFrom > state.activityTo) {
     if (key === "activityFrom") state.activityTo = parsed;
     else state.activityFrom = parsed;
+    notify("El otro límite del rango se ha ajustado para mantener el orden de fechas.");
+  }
+  render();
+}
+
+function updatePendingDateFilter(target, key) {
+  const parsed = parseDate(target.value);
+  if (!parsed) {
+    notify("Introduce una fecha válida en formato DD/MM/YYYY.");
+    render();
+    return;
+  }
+  state[key] = parsed;
+  if (state.pendingFrom > state.pendingTo) {
+    if (key === "pendingFrom") state.pendingTo = parsed;
+    else state.pendingFrom = parsed;
     notify("El otro límite del rango se ha ajustado para mantener el orden de fechas.");
   }
   render();
@@ -501,9 +520,28 @@ function renderHome() {
   const alertList = unresolvedRescues();
   const overspent = activeOverspentBudgets();
   const activeGoals = state.goals.filter((goal) => !goal.hidden && !goal.completedAt);
-  const recent = [...state.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
+  const recent = [...state.transactions].filter((tx) => tx.confirmed && tx.date <= today())
+    .sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).slice(0, 5);
   const forecast = forecastForDate(state.forecastDate);
-  const forecastMovements = [...forecast.movements].sort((a, b) => a.date.localeCompare(b.date));
+  const forecastMovements = state.transactions.filter((tx) =>
+    (tx.type === "income" || tx.type === "expense") &&
+    (tx.date > today() || !tx.confirmed) &&
+    (state.pendingPeriod === "all" ||
+      state.pendingPeriod === "today" && tx.date === today() ||
+      state.pendingPeriod === "month" && tx.date.slice(0, 7) === monthKey() ||
+      state.pendingPeriod === "year" && tx.date.slice(0, 4) === String(new Date().getFullYear()) ||
+      state.pendingPeriod === "range" && tx.date >= state.pendingFrom && tx.date <= state.pendingTo)
+  ).sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  const pendingTotal = forecastMovements.reduce((sum, tx) =>
+    sum + (tx.type === "income" ? Number(tx.amount) : -Number(tx.amount)), 0);
+  const pendingDateControls = state.pendingPeriod === "range"
+    ? `<label class="date-filter">Desde ${dateInput("pendingFrom", state.pendingFrom, { id: "pending-from" })}</label><label class="date-filter">Hasta ${dateInput("pendingTo", state.pendingTo, { id: "pending-to" })}</label>`
+    : "";
+  const pendingPeriodDescription = state.pendingPeriod === "all"
+    ? "Todos los ingresos y gastos pendientes a futuro, sin límite de fecha."
+    : state.pendingPeriod === "range"
+      ? `Movimientos pendientes entre ${formatDate(state.pendingFrom)} y ${formatDate(state.pendingTo)}.`
+      : `Movimientos pendientes de ${state.pendingPeriod === "today" ? "hoy" : state.pendingPeriod === "month" ? "este mes" : "este año"}.`;
   const budgetItems = state.budgets.filter((budget) => !budget.hidden && budget.period === monthKey()).slice(0, 4);
   root.innerHTML = `
     ${pageHeading("Tu dinero, más claro", "Hola, ¿cómo va tu mes?", "Un vistazo sencillo a lo que tienes y a lo que estás construyendo.",
@@ -525,9 +563,13 @@ function renderHome() {
       </article>
     </section>
     <section class="panel" style="margin-top:19px">
-      <div class="panel-heading"><div><h2>Movimientos previstos</h2><p>Importe neto de movimientos futuros o pendientes hasta ${escapeHtml(formatDate(state.forecastDate))}, sin incluir el saldo actual.</p></div></div>
-      <div class="forecast-total">${money(forecast.scheduled)}</div>
-      ${forecastMovements.length ? forecastMovements.slice(0,5).map((tx) => transactionRow(tx)).join("") : emptyState("Sin movimientos previstos", "No hay ingresos ni gastos futuros o pendientes hasta esta fecha.")}
+      <div class="panel-heading"><div><h2>Movimientos previstos</h2><p>${escapeHtml(pendingPeriodDescription)}</p></div></div>
+      <div class="filter-row forecast-filters">
+        <select class="filter-control" id="pending-period"><option value="all" ${state.pendingPeriod === "all" ? "selected" : ""}>Todos los pendientes</option><option value="today" ${state.pendingPeriod === "today" ? "selected" : ""}>Hoy</option><option value="month" ${state.pendingPeriod === "month" ? "selected" : ""}>Este mes</option><option value="year" ${state.pendingPeriod === "year" ? "selected" : ""}>Este año</option><option value="range" ${state.pendingPeriod === "range" ? "selected" : ""}>Rango personalizado</option></select>
+        ${pendingDateControls}
+      </div>
+      <div class="forecast-total">${money(pendingTotal)}</div>
+      ${forecastMovements.length ? forecastMovements.map((tx) => transactionRow(tx)).join("") : emptyState("Sin movimientos previstos", "No hay ingresos ni gastos pendientes con este periodo.")}
     </section>
     <section class="two-panels">
       <article class="panel">
@@ -552,7 +594,7 @@ function renderHome() {
       </article>
       <article class="panel content-list">
         <div class="panel-heading"><div><h2>Últimos movimientos</h2><p>Lo más reciente de tus cuentas</p></div><button class="text-link" data-view="activity">Ver todos →</button></div>
-        ${recent.length ? recent.map((tx) => transactionRow(tx)).join("") : emptyState("Todavía no hay movimientos", "Tus ingresos y gastos aparecerán aquí.")}
+        ${recent.length ? recent.map((tx) => transactionRow(tx)).join("") : emptyState("Todavía no hay movimientos confirmados", "Tus ingresos y gastos aparecerán aquí cuando se confirmen.")}
       </article>
     </section>`;
 }
@@ -2474,7 +2516,10 @@ document.addEventListener("change", (event) => {
     const all = $('input[name="all"]', target.form);
     if (target.name === "all" && target.checked) $$('input[name="tagId"]', target.form).forEach((input) => { input.checked = false; });
     else if (target.name === "tagId" && target.checked && all) all.checked = false;
-  } else if (target.id === "activity-period") {
+  } else if (target.id === "pending-period") { state.pendingPeriod = target.value; render(); }
+  else if (target.id === "pending-from") updatePendingDateFilter(target, "pendingFrom");
+  else if (target.id === "pending-to") updatePendingDateFilter(target, "pendingTo");
+  else if (target.id === "activity-period") {
     state.activityPeriod = target.value;
     state.activityDate = today();
     render();
